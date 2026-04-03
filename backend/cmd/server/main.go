@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/ybapat/screener/backend/internal/repository"
 	"github.com/ybapat/screener/backend/internal/router"
 	"github.com/ybapat/screener/backend/internal/service"
+	solclient "github.com/ybapat/screener/backend/internal/solana"
 )
 
 func main() {
@@ -59,6 +61,33 @@ func main() {
 	anonymizationService := service.NewAnonymizationService(screenTimeRepo, userRepo, datasetRepo, budgetTracker)
 	marketplaceService := service.NewMarketplaceService(datasetRepo, purchaseRepo, marketplaceRepo, creditService)
 
+	// Solana (optional — only if SOLANA_RPC_URL is configured)
+	var solanaService *service.SolanaService
+	var solanaHandler *handler.SolanaHandler
+	if cfg.SolanaRPCURL != "" {
+		sol, err := solclient.NewClient(cfg.SolanaRPCURL, cfg.SolanaKeypairPath, cfg.SolanaProgramID)
+		if err != nil {
+			slog.Error("failed to init solana client", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("solana connected", "wallet", sol.ServerPublicKey().String(), "rpc", cfg.SolanaRPCURL)
+
+		// Auto-airdrop in dev mode
+		if cfg.Env == "development" {
+			if _, err := sol.RequestAirdrop(context.Background(), sol.ServerPublicKey(), 2_000_000_000); err != nil {
+				slog.Warn("airdrop failed (may be rate limited)", "error", err)
+			}
+		}
+
+		solanaRepo := repository.NewSolanaRepository(pool)
+		solanaService = service.NewSolanaService(sol, solanaRepo, userRepo, datasetRepo, creditService, marketplaceService)
+		solanaHandler = handler.NewSolanaHandler(solanaService)
+		slog.Info("solana integration enabled")
+	} else {
+		solanaHandler = handler.NewSolanaHandler(nil)
+		slog.Info("solana integration disabled (SOLANA_RPC_URL not set)")
+	}
+
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService)
 	ingestionHandler := handler.NewIngestionHandler(ingestionService)
@@ -75,6 +104,7 @@ func main() {
 		Dataset:     datasetHandler,
 		Marketplace: marketplaceHandler,
 		Dashboard:   dashboardHandler,
+		Solana:      solanaHandler,
 	}, authService, rdb)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

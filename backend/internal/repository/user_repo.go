@@ -35,7 +35,7 @@ func (r *userRepo) Create(ctx context.Context, user *models.User) error {
 func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `
 		SELECT id, email, password_hash, display_name, role, age_range, country, timezone,
-		       credit_balance, global_epsilon_budget, epsilon_spent, created_at, updated_at
+		       credit_balance, global_epsilon_budget, epsilon_spent, solana_wallet, created_at, updated_at
 		FROM users WHERE id = $1`
 
 	u := &models.User{}
@@ -43,7 +43,7 @@ func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, err
 		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
 		&u.AgeRange, &u.Country, &u.Timezone,
 		&u.CreditBalance, &u.GlobalEpsilonBudget, &u.EpsilonSpent,
-		&u.CreatedAt, &u.UpdatedAt,
+		&u.SolanaWallet, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -57,7 +57,7 @@ func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, err
 func (r *userRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
 		SELECT id, email, password_hash, display_name, role, age_range, country, timezone,
-		       credit_balance, global_epsilon_budget, epsilon_spent, created_at, updated_at
+		       credit_balance, global_epsilon_budget, epsilon_spent, solana_wallet, created_at, updated_at
 		FROM users WHERE email = $1`
 
 	u := &models.User{}
@@ -65,13 +65,41 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
 		&u.AgeRange, &u.Country, &u.Timezone,
 		&u.CreditBalance, &u.GlobalEpsilonBudget, &u.EpsilonSpent,
-		&u.CreatedAt, &u.UpdatedAt,
+		&u.SolanaWallet, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get user by email: %w", err)
+	}
+	return u, nil
+}
+
+func (r *userRepo) LinkWallet(ctx context.Context, userID uuid.UUID, wallet string) error {
+	query := `UPDATE users SET solana_wallet = $2, updated_at = NOW() WHERE id = $1`
+	_, err := r.pool.Exec(ctx, query, userID, wallet)
+	return err
+}
+
+func (r *userRepo) GetByWallet(ctx context.Context, wallet string) (*models.User, error) {
+	query := `
+		SELECT id, email, password_hash, display_name, role, age_range, country, timezone,
+		       credit_balance, global_epsilon_budget, epsilon_spent, solana_wallet, created_at, updated_at
+		FROM users WHERE solana_wallet = $1`
+
+	u := &models.User{}
+	err := r.pool.QueryRow(ctx, query, wallet).Scan(
+		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role,
+		&u.AgeRange, &u.Country, &u.Timezone,
+		&u.CreditBalance, &u.GlobalEpsilonBudget, &u.EpsilonSpent,
+		&u.SolanaWallet, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user by wallet: %w", err)
 	}
 	return u, nil
 }

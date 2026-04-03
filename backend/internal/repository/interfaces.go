@@ -14,6 +14,8 @@ type UserRepository interface {
 	Update(ctx context.Context, user *models.User) error
 	UpdateCredits(ctx context.Context, id uuid.UUID, amount int64) (int64, error)
 	UpdateEpsilon(ctx context.Context, id uuid.UUID, epsilonDelta float64) error
+	LinkWallet(ctx context.Context, userID uuid.UUID, wallet string) error
+	GetByWallet(ctx context.Context, wallet string) (*models.User, error)
 }
 
 type RefreshTokenRepository interface {
@@ -64,6 +66,19 @@ type PurchaseRepository interface {
 type PrivacyRepository interface {
 	CreateLedgerEntry(ctx context.Context, entry *models.EpsilonLedgerEntry) error
 	GetLedgerByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.EpsilonLedgerEntry, int, error)
+}
+
+type SolanaRepository interface {
+	CreateSolTransaction(ctx context.Context, tx *models.SolTransaction) error
+	GetSolTransactionBySignature(ctx context.Context, sig string) (*models.SolTransaction, error)
+	UpdateSolTransactionStatus(ctx context.Context, id uuid.UUID, status models.SolTxStatus) error
+	GetSolTransactionsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.SolTransaction, int, error)
+	CreateEscrow(ctx context.Context, escrow *models.SolEscrow) error
+	GetEscrow(ctx context.Context, id uuid.UUID) (*models.SolEscrow, error)
+	GetEscrowByBuyerAndDataset(ctx context.Context, buyerID, datasetID uuid.UUID) (*models.SolEscrow, error)
+	UpdateEscrow(ctx context.Context, escrow *models.SolEscrow) error
+	GetConfig(ctx context.Context, key string) (string, error)
+	SetConfig(ctx context.Context, key, value string) error
 }
 
 type MarketplaceRepository interface {

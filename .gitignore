@@ -26,6 +26,10 @@ Thumbs.db
 pgdata/
 redisdata/
 
+# Solana
+**/solana-keypair.json
+contracts/escrow/target/
+
 # Binaries
 *.exe
 *.out

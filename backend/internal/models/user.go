@@ -26,6 +26,7 @@ type User struct {
 	CreditBalance        int64     `json:"credit_balance"`
 	GlobalEpsilonBudget  float64   `json:"global_epsilon_budget"`
 	EpsilonSpent         float64   `json:"epsilon_spent"`
+	SolanaWallet         *string   `json:"solana_wallet,omitempty"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }

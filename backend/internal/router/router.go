@@ -21,6 +21,7 @@ type Handlers struct {
 	Dataset     *handler.DatasetHandler
 	Marketplace *handler.MarketplaceHandler
 	Dashboard   *handler.DashboardHandler
+	Solana      *handler.SolanaHandler
 }
 
 func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.Handler {
@@ -60,6 +61,11 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.H
 		r.Post("/auth/logout", h.Auth.Logout)
 		r.Get("/api/v1/credits/history", h.Dashboard.CreditHistory)
 
+		// Solana routes (any authenticated user)
+		r.Get("/api/v1/solana/info", h.Solana.GetServerInfo)
+		r.Post("/api/v1/solana/wallet/link", h.Solana.LinkWallet)
+		r.Get("/api/v1/solana/transactions", h.Solana.GetTransactions)
+
 		// Seller routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(models.RoleSeller, models.RoleAdmin))
@@ -87,6 +93,12 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.H
 			r.Delete("/api/v1/marketplace/bids/{id}", h.Marketplace.CancelBid)
 			r.Post("/api/v1/credits/topup", h.Marketplace.TopupCredits)
 			r.Get("/api/v1/dashboard/buyer", h.Dashboard.BuyerOverview)
+
+			// Solana payment routes (buyer only)
+			r.Post("/api/v1/solana/topup/init", h.Solana.InitTopup)
+			r.Post("/api/v1/solana/topup/confirm", h.Solana.ConfirmTopup)
+			r.Post("/api/v1/solana/purchase/init", h.Solana.InitPurchase)
+			r.Post("/api/v1/solana/purchase/confirm", h.Solana.ConfirmPurchase)
 		})
 
 		// Admin routes: assemble datasets
