@@ -19,6 +19,7 @@ export interface User {
   credit_balance: number;
   global_epsilon_budget: number;
   epsilon_spent: number;
+  solana_wallet?: string;
   created_at: string;
   updated_at: string;
 }
@@ -503,4 +504,117 @@ export async function getPurchases(
     `/api/v1/buyer/purchases?limit=${limit}&offset=${offset}`
   );
   return { purchases: data || [], total: meta?.total ?? 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Solana
+// ---------------------------------------------------------------------------
+
+export interface SolTransaction {
+  id: string;
+  user_id: string;
+  tx_signature: string;
+  tx_type: "topup" | "purchase" | "seller_payout" | "escrow_deposit" | "escrow_release" | "escrow_refund";
+  amount_lamports: number;
+  from_wallet: string;
+  to_wallet: string;
+  status: "pending" | "confirmed" | "failed";
+  reference_id?: string;
+  confirmed_at?: string;
+  created_at: string;
+}
+
+export interface SolServerInfo {
+  server_wallet: string;
+  sol_balance_lamports: number;
+  lamports_per_credit: number;
+  program_id: string;
+}
+
+export interface TopupInitResponse {
+  recipient_wallet: string;
+  amount_lamports: number;
+}
+
+export interface PurchaseInitResponse {
+  escrow_pda: string;
+  vault_pda: string;
+  amount_lamports: number;
+  price_credits: number;
+  program_id: string;
+  authority: string;
+}
+
+export async function getSolanaInfo(): Promise<SolServerInfo> {
+  const { data } = await apiFetch<SolServerInfo>("/api/v1/solana/info");
+  return data;
+}
+
+export async function linkSolanaWallet(
+  wallet: string,
+  signature: string,
+  message: string
+): Promise<void> {
+  await apiFetch("/api/v1/solana/wallet/link", {
+    method: "POST",
+    body: JSON.stringify({ wallet, signature, message }),
+  });
+}
+
+export async function initSolTopup(
+  amountLamports: number
+): Promise<TopupInitResponse> {
+  const { data } = await apiFetch<TopupInitResponse>(
+    "/api/v1/solana/topup/init",
+    { method: "POST", body: JSON.stringify({ amount_lamports: amountLamports }) }
+  );
+  return data;
+}
+
+export async function confirmSolTopup(
+  txSignature: string
+): Promise<{ credit_balance: number; credits_added: number; sol_transaction: SolTransaction }> {
+  const { data } = await apiFetch<{
+    credit_balance: number;
+    credits_added: number;
+    sol_transaction: SolTransaction;
+  }>("/api/v1/solana/topup/confirm", {
+    method: "POST",
+    body: JSON.stringify({ tx_signature: txSignature }),
+  });
+  return data;
+}
+
+export async function initSolPurchase(
+  datasetId: string
+): Promise<PurchaseInitResponse> {
+  const { data } = await apiFetch<PurchaseInitResponse>(
+    "/api/v1/solana/purchase/init",
+    { method: "POST", body: JSON.stringify({ dataset_id: datasetId }) }
+  );
+  return data;
+}
+
+export async function confirmSolPurchase(
+  txSignature: string,
+  datasetId: string
+): Promise<{ purchase: Purchase; sol_transaction: SolTransaction }> {
+  const { data } = await apiFetch<{
+    purchase: Purchase;
+    sol_transaction: SolTransaction;
+  }>("/api/v1/solana/purchase/confirm", {
+    method: "POST",
+    body: JSON.stringify({ tx_signature: txSignature, dataset_id: datasetId }),
+  });
+  return data;
+}
+
+export async function getSolTransactions(
+  limit = 20,
+  offset = 0
+): Promise<{ transactions: SolTransaction[]; total: number }> {
+  const { data, meta } = await apiFetch<SolTransaction[]>(
+    `/api/v1/solana/transactions?limit=${limit}&offset=${offset}`
+  );
+  return { transactions: data || [], total: meta?.total ?? 0 };
 }

@@ -54,6 +54,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       PORT: "8080"
       ENV: development
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      SOLANA_WS_URL: ${SOLANA_WS_URL:-wss://api.devnet.solana.com}
+      SOLANA_KEYPAIR_PATH: /app/data/solana-keypair.json
+      SOLANA_PROGRAM_ID: ${SOLANA_PROGRAM_ID:-}
     depends_on:
       db:
         condition: service_healthy
@@ -63,6 +67,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./backend:/app
+      - solana-data:/app/data
 
   frontend:
     build:
@@ -82,3 +87,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  solana-data:
