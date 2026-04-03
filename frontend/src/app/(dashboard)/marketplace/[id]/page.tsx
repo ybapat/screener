@@ -4,12 +4,22 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import {
   getDataset,
   purchaseDataset,
+  initSolPurchase,
+  confirmSolPurchase,
   type Dataset,
   type DatasetSample,
 } from "@/lib/api";
+import {
+  buildDepositInstruction,
+  uuidToBytes,
+  deriveEscrowPDA,
+  deriveVaultPDA,
+} from "@/lib/escrow";
 
 export default function DatasetDetailPage() {
   const params = useParams();
@@ -17,6 +27,8 @@ export default function DatasetDetailPage() {
   const { user } = useAuth();
 
   const datasetId = params.id as string;
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction, connected } = useWallet();
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [samples, setSamples] = useState<DatasetSample[]>([]);
@@ -25,6 +37,9 @@ export default function DatasetDetailPage() {
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+  const [solPurchasing, setSolPurchasing] = useState<
+    "idle" | "signing" | "confirming" | "done" | "error"
+  >("idle");
 
   useEffect(() => {
     if (!datasetId) return;
@@ -51,6 +66,53 @@ export default function DatasetDetailPage() {
       );
     } finally {
       setPurchasing(false);
+    }
+  }
+
+  async function handleSolPurchase() {
+    if (!dataset || !publicKey || !sendTransaction) return;
+    setPurchaseError(null);
+    setSolPurchasing("signing");
+
+    try {
+      // 1. Get escrow details from backend
+      const init = await initSolPurchase(dataset.id);
+      const programId = new PublicKey(init.program_id);
+      const authority = new PublicKey(init.authority);
+      const datasetIdBytes = uuidToBytes(dataset.id);
+
+      // 2. Derive PDAs client-side
+      const [escrowPDA] = deriveEscrowPDA(programId, publicKey, datasetIdBytes);
+      const [vaultPDA] = deriveVaultPDA(programId, publicKey, datasetIdBytes);
+
+      // 3. Build deposit instruction
+      const depositIx = buildDepositInstruction({
+        programId,
+        buyer: publicKey,
+        authority,
+        escrowPDA,
+        vaultPDA,
+        amount: init.amount_lamports,
+        datasetIdBytes,
+      });
+
+      // 4. Sign and send
+      const tx = new Transaction().add(depositIx);
+      const signature = await sendTransaction(tx, connection);
+      setSolPurchasing("confirming");
+
+      // 5. Wait for on-chain confirmation
+      await connection.confirmTransaction(signature, "confirmed");
+
+      // 6. Confirm with backend
+      await confirmSolPurchase(signature, dataset.id);
+      setSolPurchasing("done");
+      setPurchaseSuccess(true);
+    } catch (err) {
+      setPurchaseError(
+        err instanceof Error ? err.message : "SOL purchase failed"
+      );
+      setSolPurchasing("error");
     }
   }
 
@@ -160,20 +222,38 @@ export default function DatasetDetailPage() {
                     Your balance: {user.credit_balance.toLocaleString()} credits
                   </p>
                 </div>
-                <button
-                  onClick={handlePurchase}
-                  disabled={
-                    purchasing ||
-                    user.credit_balance < dataset.current_price_credits
-                  }
-                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
-                >
-                  {purchasing
-                    ? "Processing..."
-                    : user.credit_balance < dataset.current_price_credits
-                    ? "Insufficient credits"
-                    : "Purchase Dataset"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePurchase}
+                    disabled={
+                      purchasing ||
+                      user.credit_balance < dataset.current_price_credits
+                    }
+                    className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+                  >
+                    {purchasing
+                      ? "Processing..."
+                      : user.credit_balance < dataset.current_price_credits
+                      ? "Insufficient credits"
+                      : "Pay with Credits"}
+                  </button>
+                  {connected && user.solana_wallet && (
+                    <button
+                      onClick={handleSolPurchase}
+                      disabled={
+                        solPurchasing === "signing" ||
+                        solPurchasing === "confirming"
+                      }
+                      className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+                    >
+                      {solPurchasing === "signing"
+                        ? "Sign in Wallet..."
+                        : solPurchasing === "confirming"
+                        ? "Confirming on-chain..."
+                        : "Pay with SOL"}
+                    </button>
+                  )}
+                </div>
               </div>
             </>
           )}

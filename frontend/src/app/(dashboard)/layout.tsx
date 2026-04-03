@@ -4,12 +4,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { SolanaProvider } from "@/contexts/solana-context";
+import { WalletButton } from "@/components/solana/WalletButton";
 
 const SELLER_NAV = [
   { label: "Dashboard", href: "/dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" },
   { label: "My Data", href: "/my-data", icon: "M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7l4-4h8l4 4M9 11h6" },
   { label: "Privacy", href: "/privacy", icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" },
   { label: "Marketplace", href: "/marketplace", icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" },
+  { label: "Solana", href: "/solana", icon: "M13 10V3L4 14h7v7l9-11h-7" },
 ];
 
 const BUYER_NAV = [
@@ -17,6 +20,7 @@ const BUYER_NAV = [
   { label: "Marketplace", href: "/marketplace", icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" },
   { label: "My Purchases", href: "/my-data", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
   { label: "My Bids", href: "/privacy", icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" },
+  { label: "Solana", href: "/solana", icon: "M13 10V3L4 14h7v7l9-11h-7" },
 ];
 
 function DashboardShell({ children }: { children: ReactNode }) {
@@ -84,8 +88,10 @@ function DashboardShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Credits & user */}
+        {/* Wallet & Credits */}
         <div className="px-4 py-4 border-t border-white/10 space-y-3">
+          <WalletButton />
+
           <div className="bg-white/5 rounded-lg px-4 py-3">
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">
               Credits
@@ -140,7 +146,9 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <SolanaProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </SolanaProvider>
     </AuthProvider>
   );
 }
