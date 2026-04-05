@@ -1,30 +1,32 @@
 # Screener
 
-A privacy-preserving screen time data marketplace. Users sell their anonymized app usage data to researchers and buyers, with mathematical privacy guarantees ensuring no individual can be re-identified.
+A privacy-preserving screen time data marketplace built on Solana. Users sell their anonymized app usage data to researchers and buyers, with mathematical privacy guarantees ensuring no individual can be re-identified. Payments are handled via SOL on Solana devnet through a custom Anchor escrow program.
 
 The system applies **k-anonymity** (grouping records so no individual stands out) and **differential privacy** (adding calibrated Laplace noise to aggregations) before any data leaves the platform. Each user has an **epsilon budget** — a hard cap on how much information about them can ever be extracted — tracked atomically with a full audit ledger.
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│   Next.js    │────▶│   Go API    │────▶│  PostgreSQL  │
-│   Frontend   │     │  (Chi)      │────▶│    Redis     │
-│  :3000       │     │  :8080      │     │  :5432/:6379 │
-└─────────────┘     └──────┬──────┘     └──────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │   Privacy   │
-                    │   Engine    │
-                    ├─────────────┤
-                    │ Generalizer │  app → category, time → bucket
-                    │ k-Anonymity │  suppress groups with < k users
-                    │ DP Noise    │  Laplace mechanism (ε-DP)
-                    │ Budget Mgr  │  atomic ε debit + audit ledger
-                    └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Next.js    │────▶│   Go API    │────▶│  PostgreSQL  │     │ Solana Devnet│
+│   Frontend   │     │  (Chi)      │────▶│    Redis     │     │              │
+│  :3000       │     │  :8080      │     │  :5432/:6379 │     │ Escrow Prog. │
+└──────┬──────┘     └──────┬──────┘     └──────────────┘     └──────┬───────┘
+       │                   │                                        │
+       │            ┌──────┴──────┐                                 │
+       │            │   Privacy   │                                 │
+       │            │   Engine    │                                 │
+       │            ├─────────────┤                                 │
+       │            │ Generalizer │  app → category, time → bucket  │
+       │            │ k-Anonymity │  suppress groups with < k users │
+       │            │ DP Noise    │  Laplace mechanism (ε-DP)       │
+       │            │ Budget Mgr  │  atomic ε debit + audit ledger  │
+       │            └─────────────┘                                 │
+       │                                                            │
+       └──── Phantom/Solflare wallet ── deposit/release/refund ─────┘
 ```
 
-**Stack:** Go (Chi) / Next.js 15 / React 19 / Tailwind v4 / PostgreSQL 16 / Redis 7 — all Dockerized, zero global installs.
+**Stack:** Go (Chi) / Next.js 15 / React 19 / Tailwind v4 / PostgreSQL 16 / Redis 7 / Solana (Anchor/Rust) — all Dockerized, zero global installs.
 
 ## Quick Start
 
@@ -84,6 +86,36 @@ price = base × rarity × demand × quality
 - **Demand:** number of active bids for similar data
 - **Quality:** ratio of k-anonymity threshold to epsilon (higher k and lower ε = better privacy = higher quality)
 
+### 5. Solana Payments
+
+The platform supports SOL payments on Solana devnet via a custom **Anchor escrow program** (`contracts/escrow/`). Two payment flows:
+
+**Credit Top-Up (Direct Transfer):**
+Users connect a Phantom or Solflare wallet, then send SOL directly to the server wallet. The backend verifies the on-chain transfer and credits their account at a configurable exchange rate.
+
+**Dataset Purchase (Escrow):**
+1. Buyer clicks "Pay with SOL" — frontend calls `POST /solana/purchase/init`
+2. Backend returns escrow PDA address, amount in lamports, program ID
+3. Frontend builds a `deposit` instruction targeting the escrow program; Phantom signs and submits
+4. Frontend sends the tx signature to `POST /solana/purchase/confirm`
+5. Backend verifies the deposit on-chain (escrow PDA now holds the SOL)
+6. Backend creates the purchase, then calls `release` on the escrow program for each seller with a linked wallet (server keypair is the authority)
+7. Sellers without wallets receive mock credits instead
+
+#### Escrow Program
+
+The Anchor program (`contracts/escrow/programs/escrow/src/lib.rs`) has three instructions:
+
+| Instruction | Signer | What it does |
+|-------------|--------|-------------|
+| `deposit` | Buyer | Transfers SOL into a PDA vault; creates `EscrowState` account |
+| `release` | Authority (server) | Sends SOL from vault to a seller; can be called per-seller until drained |
+| `refund` | Authority (server) | Returns remaining SOL to the buyer if the purchase is cancelled |
+
+PDA seeds: `["escrow", buyer_pubkey, dataset_id]` for state, `["vault", buyer_pubkey, dataset_id]` for the vault.
+
+The entire Solana subsystem is **optional** — if `SOLANA_RPC_URL` is unset, the platform runs with mock credits only.
+
 ## API Routes
 
 ### Public
@@ -117,6 +149,17 @@ price = base × rarity × demand × quality
 | POST | `/api/v1/credits/topup` | Add credits (mock) |
 | GET | `/api/v1/dashboard/buyer` | Spend history, active bids |
 
+### Solana (authenticated)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/solana/info` | Server wallet, balance, exchange rate, program ID |
+| POST | `/api/v1/solana/wallet/link` | Link Phantom/Solflare wallet (Ed25519 sig verify) |
+| GET | `/api/v1/solana/transactions` | SOL transaction history |
+| POST | `/api/v1/solana/topup/init` | Get server wallet address for direct transfer |
+| POST | `/api/v1/solana/topup/confirm` | Verify on-chain transfer, credit account |
+| POST | `/api/v1/solana/purchase/init` | Get escrow PDA + amount for deposit |
+| POST | `/api/v1/solana/purchase/confirm` | Verify escrow deposit, release to sellers |
+
 ### Admin
 | Method | Path | Description |
 |--------|------|-------------|
@@ -128,40 +171,51 @@ price = base × rarity × demand × quality
 screener/
 ├── docker-compose.yml
 ├── Makefile
+├── contracts/
+│   ├── escrow/
+│   │   ├── Anchor.toml              # Devnet config
+│   │   ├── Cargo.toml               # Workspace manifest
+│   │   └── programs/escrow/
+│   │       └── src/lib.rs           # Anchor escrow program (deposit/release/refund)
+│   ├── Dockerfile.anchor            # Rust + Anchor build environment
+│   └── deploy.sh                    # Build + deploy to devnet
 ├── backend/
-│   ├── cmd/server/main.go          # Entrypoint — wires everything
+│   ├── cmd/server/main.go           # Entrypoint — wires everything
 │   ├── internal/
-│   │   ├── config/                  # Env-based configuration
-│   │   ├── db/                      # Postgres/Redis setup + SQL migrations
-│   │   ├── models/                  # Domain models (User, ScreenTime, Dataset, etc.)
-│   │   ├── repository/              # Database access layer (pgx)
-│   │   ├── service/                 # Business logic (auth, ingestion, anonymization, credits)
-│   │   ├── handler/                 # HTTP handlers
-│   │   ├── middleware/              # Auth, RBAC, CORS, rate limiting, logging
-│   │   ├── router/                  # Chi route assembly
-│   │   ├── privacy/                 # k-anonymity, differential privacy, budget tracker
-│   │   └── pricing/                 # Dynamic pricing engine
-│   └── pkg/                         # Shared utilities (errors, validation, response)
+│   │   ├── config/                   # Env-based configuration
+│   │   ├── db/                       # Postgres/Redis setup + SQL migrations
+│   │   ├── models/                   # Domain models (User, ScreenTime, Dataset, Solana)
+│   │   ├── repository/               # Database access layer (pgx)
+│   │   ├── service/                  # Business logic (auth, ingestion, anonymization, solana)
+│   │   ├── handler/                  # HTTP handlers
+│   │   ├── middleware/               # Auth, RBAC, CORS, rate limiting, logging
+│   │   ├── router/                   # Chi route assembly
+│   │   ├── privacy/                  # k-anonymity, differential privacy, budget tracker
+│   │   ├── pricing/                  # Dynamic pricing engine
+│   │   └── solana/                   # Solana RPC client, keypair mgmt, escrow instructions
+│   └── pkg/                          # Shared utilities (errors, validation, response)
 ├── frontend/
 │   └── src/
-│       ├── app/                     # Next.js App Router pages
-│       ├── components/              # UI components
-│       ├── lib/                     # API client, auth helpers
-│       ├── contexts/                # Auth context
-│       └── types/                   # TypeScript types
+│       ├── app/                      # Next.js App Router pages (incl. /solana)
+│       ├── components/
+│       │   └── solana/               # WalletButton, SolTopup
+│       ├── lib/                      # API client, auth helpers, escrow instruction builder
+│       ├── contexts/                 # Auth + Solana wallet contexts
+│       └── types/                    # TypeScript types
 └── scripts/
-    └── seed.go                      # Test data generator
+    └── seed.go                       # Test data generator
 ```
 
 ## Database Schema
 
-5 migrations, applied automatically on `docker compose up`:
+6 migrations, applied automatically on `docker compose up`:
 
 1. **Users & Auth** — `users` (with roles, epsilon budget, credit balance), `refresh_tokens`
 2. **Screen Time** — `screentime_records`, `data_batches`, `sharing_preferences`
 3. **Datasets & Marketplace** — `datasets`, `dataset_contributors`, `dataset_samples`, `purchases`
 4. **Privacy Ledger** — `epsilon_ledger` (immutable audit log of all budget expenditures)
 5. **Bidding** — `data_segments`, `bids`, `price_history`, `credit_transactions`
+6. **Solana** — `sol_transactions` (on-chain tx log), `sol_escrows` (escrow state), `sol_config` (exchange rate), `solana_wallet` column on `users`
 
 ## Make Commands
 
@@ -190,6 +244,12 @@ screener/
 | Chi over Fiber | Chi uses stdlib `net/http`, compatible with all Go middleware |
 | k-anonymity from scratch | No mature Go library; the algorithm is ~200 lines of group-by + suppress |
 | Pure-Go Laplace mechanism | Avoids CGo dependency on Google's DP library while providing formal guarantees |
-| Credits as int64 cents | No float precision issues, maps to Stripe cents and ETH wei later |
+| Credits as int64 cents | No float precision issues, maps to lamports cleanly |
 | Datasets stored as JSONL files | Not in Postgres — they can be large. Metadata in DB, data on disk |
 | Atomic epsilon debit | PostgreSQL transaction with conditional UPDATE prevents race conditions |
+| Anchor escrow program | Demonstrates real Solana program dev: PDAs, CPIs, account validation, authority gating |
+| Server keypair as authority | Backend controls release/refund — business logic stays server-side, program stays simple |
+| `gagliardetto/solana-go` | Standard Go Solana library, pure Go, no CGo |
+| Direct transfer for top-ups | Escrow is overkill for credit purchases — simple `SystemProgram.transfer` is cleaner |
+| Optional Solana subsystem | If `SOLANA_RPC_URL` is unset, the entire layer is disabled; mock credits still work |
+| Idempotent tx confirms | `tx_signature UNIQUE` constraint prevents double-crediting on retries |
