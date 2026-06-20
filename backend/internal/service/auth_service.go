@@ -140,6 +140,36 @@ func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID) error {
 	return s.refreshTokens.RevokeAllForUser(ctx, userID)
 }
 
+// ChangePassword verifies the current password and replaces it with the new one.
+// All existing refresh tokens are revoked so other sessions are invalidated.
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil || user == nil {
+		return apierror.Internal("user not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return apierror.Unauthorized("current password is incorrect")
+	}
+
+	if len(newPassword) < 8 || len(newPassword) > 128 {
+		return apierror.BadRequest("new password must be 8–128 characters")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return apierror.Internal("failed to hash password")
+	}
+
+	if err := s.users.UpdatePassword(ctx, userID, string(hash)); err != nil {
+		return apierror.Internal("failed to update password")
+	}
+
+	// Invalidate all sessions so stolen tokens can't be reused
+	s.refreshTokens.RevokeAllForUser(ctx, userID)
+	return nil
+}
+
 func (s *AuthService) generateTokenPair(ctx context.Context, user *models.User) (*TokenPair, error) {
 	expiresAt := time.Now().Add(15 * time.Minute)
 

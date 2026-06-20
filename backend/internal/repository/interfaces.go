@@ -12,6 +12,7 @@ type UserRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	Update(ctx context.Context, user *models.User) error
+	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
 	UpdateCredits(ctx context.Context, id uuid.UUID, amount int64) (int64, error)
 	UpdateEpsilon(ctx context.Context, id uuid.UUID, epsilonDelta float64) error
 	LinkWallet(ctx context.Context, userID uuid.UUID, wallet string) error

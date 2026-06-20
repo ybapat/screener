@@ -113,6 +113,13 @@ func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	return err
 }
 
+func (r *userRepo) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`,
+		id, passwordHash)
+	return err
+}
+
 func (r *userRepo) UpdateCredits(ctx context.Context, id uuid.UUID, amount int64) (int64, error) {
 	query := `
 		UPDATE users SET credit_balance = credit_balance + $2, updated_at = NOW()

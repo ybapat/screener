@@ -6,6 +6,7 @@ import (
 	"github.com/ybapat/screener/backend/internal/middleware"
 	"github.com/ybapat/screener/backend/internal/privacy"
 	"github.com/ybapat/screener/backend/internal/repository"
+	"github.com/ybapat/screener/backend/internal/service"
 	"github.com/ybapat/screener/backend/pkg/apierror"
 	"github.com/ybapat/screener/backend/pkg/response"
 	"github.com/ybapat/screener/backend/pkg/validator"
@@ -14,10 +15,11 @@ import (
 type UserHandler struct {
 	users         repository.UserRepository
 	budgetTracker *privacy.BudgetTracker
+	auth          *service.AuthService
 }
 
-func NewUserHandler(users repository.UserRepository, bt *privacy.BudgetTracker) *UserHandler {
-	return &UserHandler{users: users, budgetTracker: bt}
+func NewUserHandler(users repository.UserRepository, bt *privacy.BudgetTracker, auth *service.AuthService) *UserHandler {
+	return &UserHandler{users: users, budgetTracker: bt, auth: auth}
 }
 
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
@@ -98,4 +100,28 @@ func (h *UserHandler) GetEpsilonLedger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSONWithMeta(w, http.StatusOK, entries, map[string]int{"total": total})
+}
+
+func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var req struct {
+		CurrentPassword string `json:"current_password" validate:"required"`
+		NewPassword     string `json:"new_password" validate:"required,min=8,max=128"`
+	}
+	if err := validator.DecodeAndValidate(r, &req); err != nil {
+		response.Error(w, apierror.BadRequest(err.Error()))
+		return
+	}
+
+	if err := h.auth.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+		if apiErr, ok := err.(*apierror.APIError); ok {
+			response.Error(w, apiErr)
+			return
+		}
+		response.Error(w, apierror.Internal("failed to change password"))
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"message": "password updated"})
 }

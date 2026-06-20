@@ -91,7 +91,7 @@ func main() {
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService)
 	ingestionHandler := handler.NewIngestionHandler(ingestionService)
-	userHandler := handler.NewUserHandler(userRepo, budgetTracker)
+	userHandler := handler.NewUserHandler(userRepo, budgetTracker, authService)
 	datasetHandler := handler.NewDatasetHandler(marketplaceService, anonymizationService)
 	marketplaceHandler := handler.NewMarketplaceHandler(marketplaceService, creditService)
 	dashboardHandler := handler.NewDashboardHandler(userRepo, creditService, ingestionService, marketplaceService, budgetTracker)

@@ -82,6 +82,7 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client, pool *
 		// Common (any authenticated user)
 		r.Get("/api/v1/users/me", h.User.GetProfile)
 		r.Patch("/api/v1/users/me", h.User.UpdateProfile)
+		r.Post("/api/v1/users/me/password", h.User.ChangePassword)
 		r.Post("/auth/logout", h.Auth.Logout)
 		r.Get("/api/v1/credits/history", h.Dashboard.CreditHistory)
 
