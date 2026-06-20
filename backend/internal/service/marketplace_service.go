@@ -32,8 +32,8 @@ func NewMarketplaceService(
 	}
 }
 
-func (s *MarketplaceService) ListDatasets(ctx context.Context, categories []string, limit, offset int) ([]models.Dataset, int, error) {
-	return s.datasets.ListActive(ctx, categories, limit, offset)
+func (s *MarketplaceService) ListDatasets(ctx context.Context, p repository.DatasetListParams) ([]models.Dataset, int, error) {
+	return s.datasets.ListActive(ctx, p)
 }
 
 func (s *MarketplaceService) GetDataset(ctx context.Context, id uuid.UUID) (*models.Dataset, error) {

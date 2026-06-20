@@ -42,10 +42,21 @@ type SharingPreferenceRepository interface {
 	GetByUserAndCategory(ctx context.Context, userID uuid.UUID, category string) (*models.SharingPreference, error)
 }
 
+// DatasetListParams filters and sorts the active dataset listing.
+type DatasetListParams struct {
+	Categories []string
+	Search     string // title/description substring match
+	MinPrice   int64
+	MaxPrice   int64
+	SortBy     string // "price_asc", "price_desc", "newest", "contributors"
+	Limit      int
+	Offset     int
+}
+
 type DatasetRepository interface {
 	Create(ctx context.Context, ds *models.Dataset) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Dataset, error)
-	ListActive(ctx context.Context, categories []string, limit, offset int) ([]models.Dataset, int, error)
+	ListActive(ctx context.Context, p DatasetListParams) ([]models.Dataset, int, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.DatasetStatus) error
 	UpdatePrice(ctx context.Context, id uuid.UUID, price int64) error
 	AddContributor(ctx context.Context, dc *models.DatasetContributor) error

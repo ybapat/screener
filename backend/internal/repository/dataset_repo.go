@@ -55,37 +55,55 @@ func (r *datasetRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Datase
 	return ds, nil
 }
 
-func (r *datasetRepo) ListActive(ctx context.Context, categories []string, limit, offset int) ([]models.Dataset, int, error) {
-	var total int
-	countQuery := `SELECT COUNT(*) FROM datasets WHERE status = 'active'`
+func (r *datasetRepo) ListActive(ctx context.Context, p DatasetListParams) ([]models.Dataset, int, error) {
+	where := `status = 'active'`
 	args := []any{}
+	idx := 1
 
-	if len(categories) > 0 {
-		countQuery += ` AND category_filter && $1`
-		args = append(args, categories)
+	if len(p.Categories) > 0 {
+		where += fmt.Sprintf(` AND category_filter && $%d`, idx)
+		args = append(args, p.Categories)
+		idx++
 	}
-	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
-	if err != nil {
+	if p.Search != "" {
+		where += fmt.Sprintf(` AND (title ILIKE $%d OR description ILIKE $%d)`, idx, idx)
+		args = append(args, "%"+p.Search+"%")
+		idx++
+	}
+	if p.MinPrice > 0 {
+		where += fmt.Sprintf(` AND current_price_credits >= $%d`, idx)
+		args = append(args, p.MinPrice)
+		idx++
+	}
+	if p.MaxPrice > 0 {
+		where += fmt.Sprintf(` AND current_price_credits <= $%d`, idx)
+		args = append(args, p.MaxPrice)
+		idx++
+	}
+
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM datasets WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	listQuery := `
+	orderBy := `created_at DESC`
+	switch p.SortBy {
+	case "price_asc":
+		orderBy = `current_price_credits ASC`
+	case "price_desc":
+		orderBy = `current_price_credits DESC`
+	case "contributors":
+		orderBy = `contributor_count DESC`
+	}
+
+	listQuery := fmt.Sprintf(`
 		SELECT id, title, description, category_filter, contributor_count, record_count,
 			date_range_start, date_range_end, k_anonymity_k, epsilon_per_query, noise_mechanism,
 			base_price_credits, current_price_credits, age_ranges, countries, status, created_at, updated_at
-		FROM datasets WHERE status = 'active'`
+		FROM datasets WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d`, where, orderBy, idx, idx+1)
+	args = append(args, p.Limit, p.Offset)
 
-	listArgs := []any{}
-	argIdx := 1
-	if len(categories) > 0 {
-		listQuery += fmt.Sprintf(` AND category_filter && $%d`, argIdx)
-		listArgs = append(listArgs, categories)
-		argIdx++
-	}
-	listQuery += fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
-	listArgs = append(listArgs, limit, offset)
-
-	rows, err := r.pool.Query(ctx, listQuery, listArgs...)
+	rows, err := r.pool.Query(ctx, listQuery, args...)
 	if err != nil {
 		return nil, 0, err
 	}
