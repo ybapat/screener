@@ -41,10 +41,13 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.H
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Public auth routes
-	r.Post("/auth/register", h.Auth.Register)
-	r.Post("/auth/login", h.Auth.Login)
-	r.Post("/auth/refresh", h.Auth.Refresh)
+	// Public auth routes — rate limited by IP to slow brute force
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RateLimitByIP(rdb, 20, time.Minute))
+		r.Post("/auth/register", h.Auth.Register)
+		r.Post("/auth/login", h.Auth.Login)
+		r.Post("/auth/refresh", h.Auth.Refresh)
+	})
 
 	// Public marketplace browsing
 	r.Get("/api/v1/marketplace/datasets", h.Dataset.ListPublic)
