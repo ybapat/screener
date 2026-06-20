@@ -98,13 +98,13 @@ func (h *DatasetHandler) GetSamples(w http.ResponseWriter, r *http.Request) {
 func (h *DatasetHandler) Assemble(w http.ResponseWriter, r *http.Request) {
 	var req service.AssembleParams
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 
 	result, err := h.anonymization.AssembleDataset(r.Context(), req)
 	if err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 

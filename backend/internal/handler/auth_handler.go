@@ -21,7 +21,7 @@ func NewAuthHandler(auth *service.AuthService) *AuthHandler {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req service.RegisterRequest
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req service.LoginRequest
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token" validate:"required"`
 	}
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 

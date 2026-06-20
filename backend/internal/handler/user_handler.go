@@ -42,7 +42,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Timezone    *string `json:"timezone,omitempty"`
 	}
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		NewPassword     string `json:"new_password" validate:"required,min=8,max=128"`
 	}
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 

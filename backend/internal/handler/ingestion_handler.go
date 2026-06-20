@@ -28,7 +28,7 @@ func (h *IngestionHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	var req models.ScreenTimeUploadRequest
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 

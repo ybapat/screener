@@ -105,7 +105,7 @@ func (h *MarketplaceHandler) CreateSegment(w http.ResponseWriter, r *http.Reques
 
 	var seg models.DataSegment
 	if err := validator.DecodeAndValidate(r, &seg); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 
@@ -144,7 +144,7 @@ func (h *MarketplaceHandler) PlaceBid(w http.ResponseWriter, r *http.Request) {
 		DurationMinutes int   `json:"duration_minutes" validate:"required,gt=0,max=10080"`
 	}
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *MarketplaceHandler) TopupCredits(w http.ResponseWriter, r *http.Request
 		Amount int64 `json:"amount" validate:"required,gt=0,max=100000"`
 	}
 	if err := validator.DecodeAndValidate(r, &req); err != nil {
-		response.Error(w, apierror.BadRequest(err.Error()))
+		response.Error(w, apierror.From(err))
 		return
 	}
 

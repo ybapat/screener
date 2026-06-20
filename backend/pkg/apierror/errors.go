@@ -39,6 +39,19 @@ func TooManyRequests(msg string) *APIError {
 	return &APIError{Status: http.StatusTooManyRequests, Code: "RATE_LIMITED", Message: msg}
 }
 
+func UnprocessableEntity(msg string) *APIError {
+	return &APIError{Status: http.StatusUnprocessableEntity, Code: "VALIDATION_ERROR", Message: msg}
+}
+
+// From coerces any error to *APIError. If the error is already an *APIError it
+// is returned as-is; otherwise it is wrapped as a 400 Bad Request.
+func From(err error) *APIError {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr
+	}
+	return BadRequest(err.Error())
+}
+
 func Internal(msg string) *APIError {
 	return &APIError{Status: http.StatusInternalServerError, Code: "INTERNAL_ERROR", Message: msg}
 }

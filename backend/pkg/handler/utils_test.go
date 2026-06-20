@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -44,7 +45,7 @@ func TestParseUUIDParam(t *testing.T) {
 			if tt.paramValue != "" {
 				rctx.URLParams.Add(tt.paramName, tt.paramValue)
 			}
-			r = r.WithContext(chi.NewRouteContext().WithValue(chi.RouteCtxKey, rctx))
+			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 			id, err := ParseUUIDParam(r, tt.paramName)
 
