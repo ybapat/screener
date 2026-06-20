@@ -59,6 +59,7 @@ func (h *IngestionHandler) ListBatches(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *IngestionHandler) GetBatch(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
 	batchID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		response.Error(w, apierror.BadRequest("invalid batch id"))
@@ -68,6 +69,14 @@ func (h *IngestionHandler) GetBatch(w http.ResponseWriter, r *http.Request) {
 	batch, err := h.ingestion.GetBatch(r.Context(), batchID)
 	if err != nil {
 		response.Error(w, apierror.Internal("failed to get batch"))
+		return
+	}
+	if batch == nil {
+		response.Error(w, apierror.NotFound("batch not found"))
+		return
+	}
+	if batch.UserID != userID {
+		response.Error(w, apierror.Forbidden("not your batch"))
 		return
 	}
 
