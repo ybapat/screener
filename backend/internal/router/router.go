@@ -110,8 +110,10 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client, pool *
 
 			r.Post("/api/v1/marketplace/datasets/{id}/purchase", h.Marketplace.Purchase)
 			r.Get("/api/v1/buyer/purchases", h.Marketplace.GetPurchases)
+			r.Get("/api/v1/buyer/purchases/{id}", h.Marketplace.GetPurchase)
 			r.Post("/api/v1/marketplace/segments", h.Marketplace.CreateSegment)
 			r.Get("/api/v1/marketplace/segments", h.Marketplace.ListSegments)
+			r.Get("/api/v1/marketplace/segments/{id}", h.Marketplace.GetSegment)
 			r.Post("/api/v1/marketplace/segments/{id}/bids", h.Marketplace.PlaceBid)
 			r.Get("/api/v1/marketplace/bids", h.Marketplace.ListBids)
 			r.Delete("/api/v1/marketplace/bids/{id}", h.Marketplace.CancelBid)

@@ -58,6 +58,48 @@ func (h *MarketplaceHandler) GetPurchases(w http.ResponseWriter, r *http.Request
 	response.JSONWithMeta(w, http.StatusOK, purchases, map[string]int{"total": total})
 }
 
+func (h *MarketplaceHandler) GetPurchase(w http.ResponseWriter, r *http.Request) {
+	buyerID := middleware.GetUserID(r.Context())
+	purchaseID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		response.Error(w, apierror.BadRequest("invalid purchase id"))
+		return
+	}
+
+	purchase, err := h.marketplace.GetPurchaseByID(r.Context(), buyerID, purchaseID)
+	if err != nil {
+		if apiErr, ok := err.(*apierror.APIError); ok {
+			response.Error(w, apiErr)
+			return
+		}
+		response.Error(w, apierror.Internal("failed to get purchase"))
+		return
+	}
+
+	response.JSON(w, http.StatusOK, purchase)
+}
+
+func (h *MarketplaceHandler) GetSegment(w http.ResponseWriter, r *http.Request) {
+	buyerID := middleware.GetUserID(r.Context())
+	segmentID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		response.Error(w, apierror.BadRequest("invalid segment id"))
+		return
+	}
+
+	seg, err := h.marketplace.GetSegmentByID(r.Context(), buyerID, segmentID)
+	if err != nil {
+		if apiErr, ok := err.(*apierror.APIError); ok {
+			response.Error(w, apiErr)
+			return
+		}
+		response.Error(w, apierror.Internal("failed to get segment"))
+		return
+	}
+
+	response.JSON(w, http.StatusOK, seg)
+}
+
 func (h *MarketplaceHandler) CreateSegment(w http.ResponseWriter, r *http.Request) {
 	buyerID := middleware.GetUserID(r.Context())
 

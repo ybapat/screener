@@ -136,6 +136,34 @@ func (s *MarketplaceService) GetPurchases(ctx context.Context, buyerID uuid.UUID
 	return s.purchases.GetByBuyer(ctx, buyerID, limit, offset)
 }
 
+func (s *MarketplaceService) GetPurchaseByID(ctx context.Context, buyerID, purchaseID uuid.UUID) (*models.Purchase, error) {
+	p, err := s.purchases.GetByID(ctx, purchaseID)
+	if err != nil {
+		return nil, apierror.Internal("failed to get purchase")
+	}
+	if p == nil {
+		return nil, apierror.NotFound("purchase not found")
+	}
+	if p.BuyerID != buyerID {
+		return nil, apierror.Forbidden("not your purchase")
+	}
+	return p, nil
+}
+
+func (s *MarketplaceService) GetSegmentByID(ctx context.Context, buyerID, segmentID uuid.UUID) (*models.DataSegment, error) {
+	seg, err := s.marketplace.GetSegmentByID(ctx, segmentID)
+	if err != nil {
+		return nil, apierror.Internal("failed to get segment")
+	}
+	if seg == nil {
+		return nil, apierror.NotFound("segment not found")
+	}
+	if seg.BuyerID != buyerID {
+		return nil, apierror.Forbidden("not your segment")
+	}
+	return seg, nil
+}
+
 // Segments and Bids
 
 func (s *MarketplaceService) CreateSegment(ctx context.Context, buyerID uuid.UUID, seg *models.DataSegment) error {
