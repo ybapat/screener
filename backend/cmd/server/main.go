@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ybapat/screener/backend/internal/config"
@@ -123,9 +125,29 @@ func main() {
 	}()
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
+	srv := &http.Server{Addr: addr, Handler: r}
+
 	slog.Info("starting server", "addr", addr, "env", cfg.Env)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		slog.Error("server failed", "error", err)
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-quit
+	slog.Info("shutting down gracefully…")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("forced shutdown", "error", err)
 		os.Exit(1)
 	}
+	slog.Info("server stopped")
 }
