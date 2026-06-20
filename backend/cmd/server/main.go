@@ -105,7 +105,7 @@ func main() {
 		Marketplace: marketplaceHandler,
 		Dashboard:   dashboardHandler,
 		Solana:      solanaHandler,
-	}, authService, rdb)
+	}, authService, rdb, pool)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	slog.Info("starting server", "addr", addr, "env", cfg.Env)

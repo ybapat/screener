@@ -1,11 +1,14 @@
 package router
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/ybapat/screener/backend/internal/handler"
@@ -24,7 +27,7 @@ type Handlers struct {
 	Solana      *handler.SolanaHandler
 }
 
-func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.Handler {
+func New(h Handlers, authService *service.AuthService, rdb *redis.Client, pool *pgxpool.Pool) http.Handler {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -35,10 +38,28 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.H
 	r.Use(middleware.CORS())
 	r.Use(chimiddleware.Timeout(30 * time.Second))
 
-	// Health check
+	// Health check with dependency status
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		pgOK := pool.Ping(ctx) == nil
+		redisOK := rdb.Ping(ctx).Err() == nil
+
+		status := "ok"
+		code := http.StatusOK
+		if !pgOK || !redisOK {
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":   status,
+			"postgres": boolToStatus(pgOK),
+			"redis":    boolToStatus(redisOK),
+		})
 	})
 
 	// Public auth routes — rate limited by IP to slow brute force
@@ -112,4 +133,11 @@ func New(h Handlers, authService *service.AuthService, rdb *redis.Client) http.H
 	})
 
 	return r
+}
+
+func boolToStatus(ok bool) string {
+	if ok {
+		return "ok"
+	}
+	return "unavailable"
 }
