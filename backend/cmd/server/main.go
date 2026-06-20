@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ybapat/screener/backend/internal/config"
 	"github.com/ybapat/screener/backend/internal/db"
@@ -106,6 +107,20 @@ func main() {
 		Dashboard:   dashboardHandler,
 		Solana:      solanaHandler,
 	}, authService, rdb, pool)
+
+	// Background: expire stale bids every 5 minutes
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			n, err := marketplaceRepo.ExpireOldBids(context.Background())
+			if err != nil {
+				slog.Warn("bid expiry sweep failed", "error", err)
+			} else if n > 0 {
+				slog.Info("expired stale bids", "count", n)
+			}
+		}
+	}()
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	slog.Info("starting server", "addr", addr, "env", cfg.Env)
